@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Document Parser</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .upload-area.dragover { border-color: #007bff; background-color: #f8f9fa; }
+        .btn { background: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .results { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 5px; }
+        .file-item { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 3px; }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>AI Agent Document Parser</h1>
+    <p>Upload ZIP files (containing HTML/Markdown) or single DOCX files for AI-powered cleanup and DITA conversion.</p>
+    
+    <div class="upload-area" id="uploadArea">
+        <p>Drag and drop files here or click to select</p>
+        <input type="file" id="fileInput" accept=".zip,.docx" style="display: none;">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Select File</button>
+    </div>
+    
+    <div id="status" style="display: none;"></div>
+    <div id="results" style="display: none;"></div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                processFile(e.target.files[0]);
+            }
+        });
+
+        async function processFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            status.style.display = 'block';
+            status.innerHTML = '<p>Processing file... This may take a moment.</p>';
+            results.style.display = 'none';
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayResults(result);
+                } else {
+                    status.innerHTML = `<p style="color: red;">Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        function displayResults(result) {
+            status.style.display = 'none';
+            results.style.display = 'block';
+            
+            let html = '<div class="results"><h3>Conversion Results</h3>';
+            const totalFiles = result.results.reduce((sum, item) => sum + (item.fileCount || 0), 0);
+            html += `<p><strong>Total Files Processed:</strong> ${totalFiles}</p>`;
+            
+            result.results.forEach(item => {
+                const statusClass = item.status === 'success' ? 'success' : 'error';
+                html += `<div class="file-item ${statusClass}">
+                    <strong>${item.fileType.toUpperCase()}</strong> files (${item.fileCount} files${item.assetCount ? ` + ${item.assetCount} assets` : ''})
+                    <br>Status: ${item.status}
+                    ${item.error ? `<br>Error: ${item.error}` : ''}
+                    ${item.downloadLink ? `<br><a href="${item.downloadLink}" target="_blank" class="btn" style="display:inline-block;margin-top:10px;">📥 Download Converted Files</a>` : ''}
+                    ${item.message ? `<br><em>${item.message}</em>` : ''}
+                </div>`;
+            });
+            
+            html += '</div>';
+            results.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
