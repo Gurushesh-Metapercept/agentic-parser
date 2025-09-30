@@ -2,10 +2,10 @@
   "name": "ai-agent-parser",
   "version": "1.0.0",
   "description": "AI agent for processing ZIP files (HTML/Markdown) or single DOCX files and converting to DITA format",
-  "main": "app.js",
+  "main": "src/server/app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node src/server/app.js",
+    "dev": "nodemon src/server/app.js"
   },
   "dependencies": {
     "express": "^4.18.2",
