@@ -22,29 +22,25 @@ class HtmlAgent {
   }
 
   async convertToApi(zipBuffer, userId) {
-    try {
-      const FormData = require("form-data");
-      const form = new FormData();
-
-      form.append("file", zipBuffer, "cleaned_files.zip");
-      form.append("userId", userId);
-
-      const response = await axios.post(this.apiEndpoint, form, {
-        headers: form.getHeaders(),
-        timeout: 60000,
-      });
-
-      return {
-        downloadLink: response.data.downloadLink,
-        message: response.data.message,
-      };
-    } catch (error) {
-      console.warn("HTML API unavailable, using mock response");
-      return {
-        downloadLink: `https://mock-api.com/download/${userId}/html`,
-        message: "Mock HTML conversion completed",
-      };
+    if (!this.apiEndpoint) {
+      throw new Error('HTML to DITA API endpoint not configured');
     }
+
+    const FormData = require("form-data");
+    const form = new FormData();
+
+    form.append("file", zipBuffer, "cleaned_files.zip");
+    form.append("userId", userId);
+
+    const response = await axios.post(this.apiEndpoint, form, {
+      headers: form.getHeaders(),
+      timeout: 60000,
+    });
+
+    return {
+      downloadLink: response.data.downloadLink,
+      message: response.data.message,
+    };
   }
 
   async cleanHtml(content) {

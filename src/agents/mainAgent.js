@@ -151,16 +151,26 @@ Respond with exactly one word: "html", "markdown", or "docx"`;
     const cleanedZip = await this.createCleanedZip(allFilesForZip);
     
     // Send to conversion API
-    const conversionResult = await agent.convertToApi(cleanedZip, userId);
-    
-    return {
-      fileType,
-      fileCount: processableFiles.length,
-      assetCount: assetFiles.length,
-      status: 'success',
-      downloadLink: conversionResult.downloadLink,
-      message: conversionResult.message
-    };
+    try {
+      const conversionResult = await agent.convertToApi(cleanedZip, userId);
+      
+      return {
+        fileType,
+        fileCount: processableFiles.length,
+        assetCount: assetFiles.length,
+        status: 'success',
+        downloadLink: conversionResult.downloadLink,
+        message: conversionResult.message
+      };
+    } catch (error) {
+      return {
+        fileType,
+        fileCount: processableFiles.length,
+        assetCount: assetFiles.length,
+        status: 'failed',
+        error: error.message
+      };
+    }
   }
 
   async createCleanedZip(allFiles) {
@@ -194,15 +204,24 @@ Respond with exactly one word: "html", "markdown", or "docx"`;
     const cleanedZip = await this.createCleanedZip([cleaned]);
     
     // Send to conversion API
-    const conversionResult = await agent.convertToApi(cleanedZip, userId);
-    
-    return [{
-      fileType: 'docx',
-      fileCount: 1,
-      status: 'success',
-      downloadLink: conversionResult.downloadLink,
-      message: conversionResult.message
-    }];
+    try {
+      const conversionResult = await agent.convertToApi(cleanedZip, userId);
+      
+      return [{
+        fileType: 'docx',
+        fileCount: 1,
+        status: 'success',
+        downloadLink: conversionResult.downloadLink,
+        message: conversionResult.message
+      }];
+    } catch (error) {
+      return [{
+        fileType: 'docx',
+        fileCount: 1,
+        status: 'failed',
+        error: error.message
+      }];
+    }
   }
 }
 

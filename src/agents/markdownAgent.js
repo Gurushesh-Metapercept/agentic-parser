@@ -11,7 +11,8 @@ class MarkdownAgent {
 
   async cleanAndProcess(fileName, content) {
     const cleanedContent = await this.cleanMarkdown(content);
-    const fixedContent = await this.fixSyntax(cleanedContent);
+    const headingValidated = await this.ensureHeading(fileName, cleanedContent);
+    const fixedContent = await this.fixSyntax(headingValidated);
 
     return {
       filename: fileName,
@@ -21,29 +22,25 @@ class MarkdownAgent {
   }
 
   async convertToApi(zipBuffer, userId) {
-    try {
-      const FormData = require("form-data");
-      const form = new FormData();
-
-      form.append("file", zipBuffer, "cleaned_files.zip");
-      form.append("userId", userId);
-
-      const response = await axios.post(this.apiEndpoint, form, {
-        headers: form.getHeaders(),
-        timeout: 60000,
-      });
-
-      return {
-        downloadLink: response.data.downloadLink,
-        message: response.data.message,
-      };
-    } catch (error) {
-      console.warn("Markdown API unavailable, using mock response");
-      return {
-        downloadLink: `https://mock-api.com/download/${userId}/markdown`,
-        message: "Mock Markdown conversion completed",
-      };
+    if (!this.apiEndpoint) {
+      throw new Error('Markdown to DITA API endpoint not configured');
     }
+
+    const FormData = require("form-data");
+    const form = new FormData();
+
+    form.append("file", zipBuffer, "cleaned_files.zip");
+    form.append("userId", userId);
+
+    const response = await axios.post(this.apiEndpoint, form, {
+      headers: form.getHeaders(),
+      timeout: 60000,
+    });
+
+    return {
+      downloadLink: response.data.downloadLink,
+      message: response.data.message,
+    };
   }
 
   async cleanMarkdown(content) {
@@ -56,6 +53,35 @@ class MarkdownAgent {
       .replace(/_{4,}/g, "___")
       .replace(/`{4,}/g, "```")
       .trim();
+  }
+
+  async ensureHeading(fileName, content) {
+    const hasHeading = /^\s*#{1,6}\s/.test(content);
+    
+    if (hasHeading) {
+      return content;
+    }
+
+    const prompt = `This markdown content lacks a proper heading. Generate an appropriate H1 title based on the filename "${fileName}" and content preview:
+
+${content.substring(0, 500)}
+
+Return only the H1 heading line (e.g., # Title) without explanations.`;
+
+    try {
+      const response = await this.groq.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: process.env.LANGCHAIN_MODEL || "llama-3.3-70b-versatile",
+        temperature: 0.3,
+      });
+
+      const aiTitle = response.choices[0].message.content.trim();
+      return `${aiTitle}\n\n${content}`;
+    } catch (error) {
+      console.error("AI heading generation failed:", error);
+      const fallbackTitle = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      return `# ${fallbackTitle}\n\n${content}`;
+    }
   }
 
   async fixSyntax(content) {
