@@ -6,6 +6,7 @@ class MarkdownAgent {
     this.groq = new Groq({
       apiKey: process.env.GROQ_API_KEY,
     });
+    this.preflightEndpoint = process.env.MARKDOWN_TO_DITA_PREFLIGHT_API;
     this.apiEndpoint = process.env.MARKDOWN_TO_DITA_API;
   }
 
@@ -22,20 +23,34 @@ class MarkdownAgent {
   }
 
   async convertToApi(zipBuffer, userId) {
-    if (!this.apiEndpoint) {
-      throw new Error('Markdown to DITA API endpoint not configured');
+    if (!this.preflightEndpoint || !this.apiEndpoint) {
+      throw new Error('Markdown to DITA API endpoints not configured');
     }
 
+    console.log(`Calling external conversion API for userId: ${userId}`);
+    
     const FormData = require("form-data");
-    const form = new FormData();
+    
+    // Step 1: Preflight check
+    const preflightForm = new FormData();
+    preflightForm.append("zipFile", zipBuffer, "cleaned_files.zip");
+    preflightForm.append("userId", userId);
 
-    form.append("file", zipBuffer, "cleaned_files.zip");
-    form.append("userId", userId);
-
-    const response = await axios.post(this.apiEndpoint, form, {
-      headers: form.getHeaders(),
+    await axios.post(this.preflightEndpoint, preflightForm, {
+      headers: preflightForm.getHeaders(),
       timeout: 60000,
     });
+
+    // Step 2: Main conversion
+    const conversionForm = new FormData();
+    conversionForm.append("userId", userId);
+
+    const response = await axios.post(this.apiEndpoint, conversionForm, {
+      headers: conversionForm.getHeaders(),
+      timeout: 60000,
+    });
+    
+    console.log(`Conversion completed successfully for userId: ${userId}`);
 
     return {
       downloadLink: response.data.downloadLink,
@@ -56,31 +71,66 @@ class MarkdownAgent {
   }
 
   async ensureHeading(fileName, content) {
-    const hasHeading = /^\s*#{1,6}\s/.test(content);
+    // Look for frontmatter anywhere in the content
+    const frontmatterMatch = content.match(/---\s*\n([\s\S]*?)\n---\s*\n/);
     
-    if (hasHeading) {
-      return content;
-    }
-
-    const prompt = `This markdown content lacks a proper heading. Generate an appropriate H1 title based on the filename "${fileName}" and content preview:
-
-${content.substring(0, 500)}
-
-Return only the H1 heading line (e.g., # Title) without explanations.`;
-
-    try {
-      const response = await this.groq.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: process.env.LANGCHAIN_MODEL || "llama-3.3-70b-versatile",
-        temperature: 0.3,
-      });
-
-      const aiTitle = response.choices[0].message.content.trim();
-      return `${aiTitle}\n\n${content}`;
-    } catch (error) {
-      console.error("AI heading generation failed:", error);
-      const fallbackTitle = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-      return `# ${fallbackTitle}\n\n${content}`;
+    if (frontmatterMatch) {
+      // Extract frontmatter and reorganize content
+      const frontmatter = frontmatterMatch[0];
+      const beforeFrontmatter = content.substring(0, frontmatterMatch.index);
+      const afterFrontmatter = content.substring(frontmatterMatch.index + frontmatter.length);
+      
+      // Combine all content except frontmatter
+      const allContent = (beforeFrontmatter + afterFrontmatter).trim();
+      
+      // Check if there's already a heading in the content
+      const hasHeading = /^\s*#{1,6}\s/.test(allContent);
+      
+      if (hasHeading) {
+        // Move frontmatter to beginning, keep existing title
+        return `${frontmatter}\n${allContent}`;
+      }
+      
+      // Generate title and structure properly: frontmatter + title + content
+      const prompt = `Generate an appropriate H1 title based on the filename "${fileName}" and content preview:\n\n${allContent.substring(0, 500)}\n\nReturn only the H1 heading line (e.g., # Title) without explanations.`;
+      
+      try {
+        const response = await this.groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: process.env.LANGCHAIN_MODEL || "llama-3.3-70b-versatile",
+          temperature: 0.3,
+        });
+        
+        const aiTitle = response.choices[0].message.content.trim();
+        return `${frontmatter}\n${aiTitle}\n\n${allContent}`;
+      } catch (error) {
+        const fallbackTitle = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        return `${frontmatter}\n# ${fallbackTitle}\n\n${allContent}`;
+      }
+    } else {
+      // No frontmatter, check for heading at start
+      const hasHeading = /^\s*#{1,6}\s/.test(content);
+      
+      if (hasHeading) {
+        return content;
+      }
+      
+      // Generate title and add at beginning
+      const prompt = `Generate an appropriate H1 title based on the filename "${fileName}" and content preview:\n\n${content.substring(0, 500)}\n\nReturn only the H1 heading line (e.g., # Title) without explanations.`;
+      
+      try {
+        const response = await this.groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: process.env.LANGCHAIN_MODEL || "llama-3.3-70b-versatile",
+          temperature: 0.3,
+        });
+        
+        const aiTitle = response.choices[0].message.content.trim();
+        return `${aiTitle}\n\n${content}`;
+      } catch (error) {
+        const fallbackTitle = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        return `# ${fallbackTitle}\n\n${content}`;
+      }
     }
   }
 
@@ -100,7 +150,6 @@ Return only the corrected markdown without explanations.`;
 
       return response.choices[0].message.content.trim();
     } catch (error) {
-      console.error("Markdown syntax fix failed:", error);
       return content;
     }
   }

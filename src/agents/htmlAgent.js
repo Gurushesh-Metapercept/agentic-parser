@@ -26,6 +26,8 @@ class HtmlAgent {
       throw new Error('HTML to DITA API endpoint not configured');
     }
 
+    console.log(`Calling external conversion API for userId: ${userId}`);
+
     const FormData = require("form-data");
     const form = new FormData();
 
@@ -36,6 +38,8 @@ class HtmlAgent {
       headers: form.getHeaders(),
       timeout: 60000,
     });
+    
+    console.log(`Conversion completed successfully for userId: ${userId}`);
 
     return {
       downloadLink: response.data.downloadLink,
@@ -81,7 +85,6 @@ Return only the corrected HTML without explanations.`;
 
       return response.choices[0].message.content.trim();
     } catch (error) {
-      console.error("HTML syntax fix failed:", error);
       return content;
     }
   }

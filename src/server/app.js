@@ -42,7 +42,7 @@ app.post("/process", upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    console.log(`Processing file: ${req.file.originalname}`);
+
 
     // Process file using main agent
     const results = await mainAgent.processFile(req.file.path);
@@ -63,7 +63,7 @@ app.post("/process", upload.single("file"), async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Processing error:", error);
+
     res.status(500).json({ error: error.message });
   }
 });

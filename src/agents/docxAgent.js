@@ -26,6 +26,8 @@ class DocxAgent {
       throw new Error('DOCX to DITA API endpoint not configured');
     }
 
+    console.log(`Calling external conversion API for userId: ${userId}`);
+
     const FormData = require('form-data');
     const form = new FormData();
     
@@ -36,6 +38,8 @@ class DocxAgent {
       headers: form.getHeaders(),
       timeout: 60000
     });
+    
+    console.log(`Conversion completed successfully for userId: ${userId}`);
     
     return {
       downloadLink: response.data.downloadLink,
@@ -48,7 +52,6 @@ class DocxAgent {
       const result = await mammoth.convertToHtml({ buffer: docxBuffer });
       return result.value;
     } catch (error) {
-      console.error('DOCX extraction failed:', error);
       return docxBuffer.toString();
     }
   }
@@ -69,7 +72,6 @@ Return only the structured content without explanations.`;
 
       return response.choices[0].message.content.trim();
     } catch (error) {
-      console.error('DOCX structuring failed:', error);
       return content;
     }
   }
